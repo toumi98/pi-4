@@ -1,0 +1,9 @@
+resources:
+  - namespace.yaml
+  - mysql.yaml
+  - eureka.yaml
+  - user.yaml
+  - milestone.yaml
+  - payment.yaml
+  - gateway.yaml
+  - web.yaml
