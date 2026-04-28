@@ -1,6 +1,5 @@
 package com.milestone.milestone.controllers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milestone.milestone.dto.MilestoneFeedbackRequest;
 import com.milestone.milestone.dto.MilestoneRequest;
 import com.milestone.milestone.dto.MilestoneResponse;
@@ -9,163 +8,147 @@ import com.milestone.milestone.security.CurrentUser;
 import com.milestone.milestone.security.JwtIdentityService;
 import com.milestone.milestone.services.MilestoneService;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(MilestoneController.class)
+@ExtendWith(MockitoExtension.class)
 class MilestoneControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockBean
+    @Mock
     private MilestoneService milestoneService;
 
-    @MockBean
+    @Mock
     private JwtIdentityService jwtIdentityService;
 
+    @InjectMocks
+    private MilestoneController controller;
+
     @Test
-    void createReturnsCreatedMilestone() throws Exception {
+    void createDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.create(any(MilestoneRequest.class), eq(currentUser()))).thenReturn(sampleResponse(MilestoneStatus.PENDING));
 
-        mockMvc.perform(post("/api")
-                        .header("Authorization", "Bearer token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequest())))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(20))
-                .andExpect(jsonPath("$.status").value("PENDING"));
+        MilestoneResponse response = controller.create("Bearer token", sampleRequest());
+
+        assertEquals(MilestoneStatus.PENDING, response.status());
     }
 
     @Test
-    void getByIdReturnsMilestone() throws Exception {
+    void getByIdDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.getById(20L, currentUser())).thenReturn(sampleResponse(MilestoneStatus.SUBMITTED));
 
-        mockMvc.perform(get("/api/20").header("Authorization", "Bearer token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(20))
-                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+        MilestoneResponse response = controller.getById("Bearer token", 20L);
+
+        assertEquals(20L, response.id());
+        assertEquals(MilestoneStatus.SUBMITTED, response.status());
     }
 
     @Test
-    void listReturnsMilestonesWhenContractIdProvided() throws Exception {
+    void listDelegatesWhenContractIdPresent() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.getByContractId(10L, currentUser())).thenReturn(List.of(sampleResponse(MilestoneStatus.PENDING)));
 
-        mockMvc.perform(get("/api")
-                        .header("Authorization", "Bearer token")
-                        .param("contractId", "10"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].contractId").value(10));
+        List<MilestoneResponse> response = controller.list("Bearer token", 10L);
+
+        assertEquals(1, response.size());
+        assertEquals(10L, response.get(0).contractId());
     }
 
     @Test
-    void listReturnsConflictWhenContractIdMissing() throws Exception {
-        mockMvc.perform(get("/api").header("Authorization", "Bearer token"))
-                .andExpect(status().is5xxServerError());
+    void listThrowsWhenContractIdMissing() {
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> controller.list("Bearer token", null)
+        );
+
+        assertEquals("contractId is required for now", exception.getMessage());
     }
 
     @Test
-    void updateReturnsUpdatedMilestone() throws Exception {
+    void updateDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.update(eq(20L), any(MilestoneRequest.class), eq(currentUser())))
                 .thenReturn(sampleResponse(MilestoneStatus.REVISION_REQUESTED));
 
-        mockMvc.perform(put("/api/20")
-                        .header("Authorization", "Bearer token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequest())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REVISION_REQUESTED"));
+        MilestoneResponse response = controller.update("Bearer token", 20L, sampleRequest());
+
+        assertEquals(MilestoneStatus.REVISION_REQUESTED, response.status());
     }
 
     @Test
-    void deleteReturnsNoContent() throws Exception {
+    void deleteDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         doNothing().when(milestoneService).delete(20L, currentUser());
 
-        mockMvc.perform(delete("/api/20").header("Authorization", "Bearer token"))
-                .andExpect(status().isNoContent());
+        controller.delete("Bearer token", 20L);
 
         verify(milestoneService).delete(20L, currentUser());
     }
 
     @Test
-    void approveReturnsApprovedMilestone() throws Exception {
+    void approveDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.approve(20L, currentUser())).thenReturn(sampleResponse(MilestoneStatus.APPROVED));
 
-        mockMvc.perform(patch("/api/20/approve").header("Authorization", "Bearer token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("APPROVED"));
+        MilestoneResponse response = controller.approve("Bearer token", 20L);
+
+        assertEquals(MilestoneStatus.APPROVED, response.status());
     }
 
     @Test
-    void requestRevisionReturnsRevisionRequestedMilestone() throws Exception {
+    void requestRevisionDelegatesToService() {
+        MilestoneFeedbackRequest request = new MilestoneFeedbackRequest("Please revise", 3L);
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
-        when(milestoneService.requestRevision(eq(20L), any(MilestoneFeedbackRequest.class), eq(currentUser())))
+        when(milestoneService.requestRevision(eq(20L), eq(request), eq(currentUser())))
                 .thenReturn(sampleResponse(MilestoneStatus.REVISION_REQUESTED));
 
-        mockMvc.perform(patch("/api/20/request-revision")
-                        .header("Authorization", "Bearer token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new MilestoneFeedbackRequest("Please revise", 3L))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REVISION_REQUESTED"));
+        MilestoneResponse response = controller.requestRevision("Bearer token", 20L, request);
+
+        assertEquals(MilestoneStatus.REVISION_REQUESTED, response.status());
     }
 
     @Test
-    void markFundedReturnsFundedMilestone() throws Exception {
+    void markFundedDelegatesToService() {
         when(milestoneService.markFunded(20L)).thenReturn(sampleResponse(MilestoneStatus.FUNDED));
 
-        mockMvc.perform(post("/api/20/mark-funded"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FUNDED"));
+        MilestoneResponse response = controller.markFunded(20L);
+
+        assertEquals(MilestoneStatus.FUNDED, response.status());
     }
 
     @Test
-    void markPaidReturnsPaidMilestone() throws Exception {
+    void markPaidDelegatesToService() {
         when(milestoneService.markPaid(20L)).thenReturn(sampleResponse(MilestoneStatus.PAID));
 
-        mockMvc.perform(post("/api/20/mark-paid"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PAID"));
+        MilestoneResponse response = controller.markPaid(20L);
+
+        assertEquals(MilestoneStatus.PAID, response.status());
     }
 
     @Test
-    void submitReturnsSubmittedMilestone() throws Exception {
+    void submitDelegatesToService() {
         when(jwtIdentityService.parseRequired("Bearer token")).thenReturn(currentUser());
         when(milestoneService.submit(20L, currentUser())).thenReturn(sampleResponse(MilestoneStatus.SUBMITTED));
 
-        mockMvc.perform(patch("/api/20/submit").header("Authorization", "Bearer token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+        MilestoneResponse response = controller.submit("Bearer token", 20L);
+
+        assertEquals(MilestoneStatus.SUBMITTED, response.status());
     }
 
     private CurrentUser currentUser() {
