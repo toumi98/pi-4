@@ -135,6 +135,8 @@ class ResourceServiceTest {
 
     @Test
     void uploadFileRejectsMissingFile() {
+        when(milestoneRepository.findById(20L)).thenReturn(Optional.of(Milestone.builder().id(20L).build()));
+
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
                 () -> resourceService.uploadFile(ResourceEntityType.MILESTONE, 20L, "Proof", "DELIVERABLE", null)
