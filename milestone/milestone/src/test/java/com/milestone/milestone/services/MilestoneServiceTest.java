@@ -26,6 +26,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -125,6 +126,41 @@ class MilestoneServiceTest {
     }
 
     @Test
+    void submitMarksPendingMilestoneSubmitted() {
+        Milestone milestone = sampleMilestone();
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+        when(repo.save(any(Milestone.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MilestoneResponse response = milestoneService.submit(20L, new CurrentUser(8L, "freelancer@test.com", "FREELANCER"));
+
+        assertEquals(MilestoneStatus.SUBMITTED, response.status());
+        assertNotNull(milestone.getSubmittedAt());
+        assertNotNull(milestone.getStatusUpdatedAt());
+    }
+
+    @Test
+    void requestRevisionMarksSubmittedMilestoneRevisionRequested() {
+        Milestone milestone = sampleMilestone();
+        milestone.setStatus(MilestoneStatus.SUBMITTED);
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+        when(repo.save(any(Milestone.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MilestoneResponse response = milestoneService.requestRevision(
+                20L,
+                new MilestoneFeedbackRequest("Please revise the header", 3L),
+                new CurrentUser(3L, "client@test.com", "CLIENT")
+        );
+
+        assertEquals(MilestoneStatus.REVISION_REQUESTED, response.status());
+        assertEquals(1, response.revisionCount());
+        assertEquals("Please revise the header", response.lastFeedback());
+    }
+
+    @Test
     void approveMarksSubmittedMilestoneAsApproved() {
         Milestone milestone = sampleMilestone();
         milestone.setStatus(MilestoneStatus.SUBMITTED);
@@ -156,6 +192,51 @@ class MilestoneServiceTest {
     }
 
     @Test
+    void markFundedRejectsPendingMilestone() {
+        Milestone milestone = sampleMilestone();
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> milestoneService.markFunded(20L)
+        );
+
+        assertEquals("Only approved milestones can be funded", exception.getMessage());
+    }
+
+    @Test
+    void getByIdRejectsUnauthorizedParticipant() {
+        Milestone milestone = sampleMilestone();
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> milestoneService.getById(20L, new CurrentUser(99L, "other@test.com", "CLIENT"))
+        );
+
+        assertEquals("You do not have access to this milestone", exception.getMessage());
+    }
+
+    @Test
+    void deleteRejectsUnauthorizedClient() {
+        Milestone milestone = sampleMilestone();
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> milestoneService.delete(20L, new CurrentUser(99L, "other@test.com", "CLIENT"))
+        );
+
+        assertEquals("Only the contract client can perform this action", exception.getMessage());
+        verify(repo, never()).deleteById(20L);
+    }
+
+    @Test
     void createRejectsInactiveContract() {
         MilestoneRequest request = new MilestoneRequest(
                 10L,
@@ -177,6 +258,20 @@ class MilestoneServiceTest {
 
         assertEquals("Milestones can only be managed inside active contracts", exception.getMessage());
         verify(repo, never()).save(any(Milestone.class));
+    }
+
+    @Test
+    void getByContractIdReturnsMilestonesForParticipant() {
+        Milestone milestone = sampleMilestone();
+
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+        when(repo.findByContractId(10L)).thenReturn(java.util.List.of(milestone));
+
+        var result = milestoneService.getByContractId(10L, new CurrentUser(3L, "client@test.com", "CLIENT"));
+
+        assertEquals(1, result.size());
+        assertEquals("Design delivery", result.get(0).title());
+        assertTrue(result.get(0).amount().compareTo(new BigDecimal("400.00")) == 0);
     }
 
     private Contract activeContract() {
