@@ -50,8 +50,7 @@ public class MilestoneService {
 
     @Transactional(readOnly = true)
     public MilestoneResponse getById(Long id, CurrentUser actor) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
         requireParticipant(loadContract(milestone.getContractId()), actor);
         return toResponse(milestone);
     }
@@ -66,8 +65,7 @@ public class MilestoneService {
         Contract contract = ensureContractIsActive(req.contractId());
         requireClientOwner(contract, actor);
 
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
 
         milestone.setContractId(req.contractId());
         milestone.setTitle(req.title());
@@ -80,20 +78,16 @@ public class MilestoneService {
     }
 
     public void delete(Long id, CurrentUser actor) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
         requireClientOwner(loadContract(milestone.getContractId()), actor);
         repo.deleteById(id);
     }
 
     public MilestoneResponse submit(Long id, CurrentUser actor) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
         requireFreelancerOwner(loadContract(milestone.getContractId()), actor);
 
-        if (milestone.getStatus() == MilestoneStatus.PAID
-                || milestone.getStatus() == MilestoneStatus.APPROVED
-                || milestone.getStatus() == MilestoneStatus.FUNDED) {
+        if (cannotBeSubmitted(milestone.getStatus())) {
             throw new IllegalStateException("Cannot submit milestone in status: " + milestone.getStatus());
         }
 
@@ -106,8 +100,7 @@ public class MilestoneService {
     }
 
     public MilestoneResponse requestRevision(Long id, MilestoneFeedbackRequest req, CurrentUser actor) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
         requireClientOwner(loadContract(milestone.getContractId()), actor);
         requireStatus(milestone, MilestoneStatus.SUBMITTED, "Only submitted milestones can request revision");
 
@@ -125,8 +118,7 @@ public class MilestoneService {
     }
 
     public MilestoneResponse approve(Long id, CurrentUser actor) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+        Milestone milestone = findMilestone(id);
         requireClientOwner(loadContract(milestone.getContractId()), actor);
         requireStatus(milestone, MilestoneStatus.SUBMITTED, "Only submitted milestones can be approved");
 
@@ -139,9 +131,8 @@ public class MilestoneService {
     }
 
     public MilestoneResponse markFunded(Long id) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
-        if (milestone.getStatus() != MilestoneStatus.APPROVED && milestone.getStatus() != MilestoneStatus.FUNDED) {
+        Milestone milestone = findMilestone(id);
+        if (!canBeFunded(milestone.getStatus())) {
             throw new IllegalStateException("Only approved milestones can be funded");
         }
 
@@ -154,9 +145,8 @@ public class MilestoneService {
     }
 
     public MilestoneResponse markPaid(Long id) {
-        Milestone milestone = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
-        if (milestone.getStatus() != MilestoneStatus.FUNDED && milestone.getStatus() != MilestoneStatus.PAID) {
+        Milestone milestone = findMilestone(id);
+        if (!canBePaid(milestone.getStatus())) {
             throw new IllegalStateException("Only funded milestones can be marked as paid");
         }
 
@@ -196,6 +186,25 @@ public class MilestoneService {
 
     private void touchStatus(Milestone milestone) {
         milestone.setStatusUpdatedAt(LocalDateTime.now());
+    }
+
+    private Milestone findMilestone(Long id) {
+        return repo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Milestone not found: " + id));
+    }
+
+    private boolean cannotBeSubmitted(MilestoneStatus status) {
+        return status == MilestoneStatus.PAID
+                || status == MilestoneStatus.APPROVED
+                || status == MilestoneStatus.FUNDED;
+    }
+
+    private boolean canBeFunded(MilestoneStatus status) {
+        return status == MilestoneStatus.APPROVED || status == MilestoneStatus.FUNDED;
+    }
+
+    private boolean canBePaid(MilestoneStatus status) {
+        return status == MilestoneStatus.FUNDED || status == MilestoneStatus.PAID;
     }
 
     private Contract ensureContractIsActive(Long contractId) {

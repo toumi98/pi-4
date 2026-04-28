@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,6 +122,61 @@ class MilestoneServiceTest {
         assertNotNull(milestone.getFundedAt());
         assertNotNull(milestone.getStatusUpdatedAt());
         verify(repo).save(milestone);
+    }
+
+    @Test
+    void approveMarksSubmittedMilestoneAsApproved() {
+        Milestone milestone = sampleMilestone();
+        milestone.setStatus(MilestoneStatus.SUBMITTED);
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(activeContract()));
+        when(repo.save(any(Milestone.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MilestoneResponse response = milestoneService.approve(20L, new CurrentUser(3L, "client@test.com", "CLIENT"));
+
+        assertEquals(MilestoneStatus.APPROVED, response.status());
+        assertNotNull(milestone.getClientApprovedAt());
+        verify(repo).save(milestone);
+    }
+
+    @Test
+    void markPaidMarksFundedMilestoneAsPaid() {
+        Milestone milestone = sampleMilestone();
+        milestone.setStatus(MilestoneStatus.FUNDED);
+
+        when(repo.findById(20L)).thenReturn(Optional.of(milestone));
+        when(repo.save(any(Milestone.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MilestoneResponse response = milestoneService.markPaid(20L);
+
+        assertEquals(MilestoneStatus.PAID, response.status());
+        assertNotNull(milestone.getPaidAt());
+        verify(repo).save(milestone);
+    }
+
+    @Test
+    void createRejectsInactiveContract() {
+        MilestoneRequest request = new MilestoneRequest(
+                10L,
+                "API delivery",
+                "Deliver REST endpoints",
+                new BigDecimal("500.00"),
+                LocalDate.now().plusDays(7)
+        );
+        CurrentUser actor = new CurrentUser(3L, "client@test.com", "CLIENT");
+        Contract inactiveContract = activeContract();
+        inactiveContract.setStatus(ContractStatus.COMPLETED);
+
+        when(contractRepository.findById(10L)).thenReturn(Optional.of(inactiveContract));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> milestoneService.create(request, actor)
+        );
+
+        assertEquals("Milestones can only be managed inside active contracts", exception.getMessage());
+        verify(repo, never()).save(any(Milestone.class));
     }
 
     private Contract activeContract() {

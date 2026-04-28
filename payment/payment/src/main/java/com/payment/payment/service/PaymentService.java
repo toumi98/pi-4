@@ -132,8 +132,7 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public PaymentResponse getById(Long id, String authorization) {
-        Payment payment = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Payment not found: " + id));
+        Payment payment = findPayment(id);
         requireParticipant(loadContract(payment.getContractId(), authorization), jwtIdentityService.parseRequired(authorization));
         return toResponse(payment);
     }
@@ -188,8 +187,7 @@ public class PaymentService {
             }
 
             Long paymentId = Long.valueOf(paymentIdNode.asText());
-            Payment payment = repo.findById(paymentId)
-                    .orElseThrow(() -> new NotFoundException("Payment not found: " + paymentId));
+            Payment payment = findPayment(paymentId);
 
             payment.setStatus(PaymentStatus.FUNDED);
             payment.setProvider("STRIPE");
@@ -210,8 +208,7 @@ public class PaymentService {
     }
 
     public PaymentResponse release(Long id, String authorization) {
-        Payment payment = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Payment not found: " + id));
+        Payment payment = findPayment(id);
         requireClientOwner(loadContract(payment.getContractId(), authorization), jwtIdentityService.parseRequired(authorization));
         if (payment.getStatus() != PaymentStatus.FUNDED && payment.getStatus() != PaymentStatus.RELEASED) {
             throw new IllegalStateException("Only funded payments can be released");
@@ -231,8 +228,7 @@ public class PaymentService {
     }
 
     public PaymentResponse requestRefund(Long id, RefundRequest req, String authorization) {
-        Payment payment = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Payment not found: " + id));
+        Payment payment = findPayment(id);
         requireClientOwner(loadContract(payment.getContractId(), authorization), jwtIdentityService.parseRequired(authorization));
         if (payment.getStatus() != PaymentStatus.FUNDED && payment.getStatus() != PaymentStatus.RELEASED) {
             throw new IllegalStateException("Only funded or released payments can enter refund flow");
@@ -246,8 +242,7 @@ public class PaymentService {
     }
 
     public void delete(Long id, String authorization) {
-        Payment payment = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Payment not found: " + id));
+        Payment payment = findPayment(id);
         requireClientOwner(loadContract(payment.getContractId(), authorization), jwtIdentityService.parseRequired(authorization));
         repo.deleteById(id);
     }
@@ -273,6 +268,11 @@ public class PaymentService {
 
     private ContractSummary loadContract(Long contractId, String authorization) {
         return milestoneClient.getContract(contractId, authorization);
+    }
+
+    private Payment findPayment(Long id) {
+        return repo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Payment not found: " + id));
     }
 
     private void requireClientOwner(ContractSummary contract, CurrentUser actor) {
