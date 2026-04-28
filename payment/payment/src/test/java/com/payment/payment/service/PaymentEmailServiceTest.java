@@ -73,6 +73,26 @@ class PaymentEmailServiceTest {
         verify(mailSender, never()).send(any(MimeMessage.class));
     }
 
+    @Test
+    void sendFundedEmail_skipsInactiveFreelancer() {
+        UserSummary freelancer = new UserSummary(6L, "freelancer@test.com", "Free", "Lancer", true, false);
+
+        paymentEmailService.sendFundedEmail(freelancer, samplePayment(PaymentStatus.FUNDED));
+
+        verify(mailSender, never()).createMimeMessage();
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void sendReleasedEmail_skipsFreelancerWithoutEmail() {
+        UserSummary freelancer = new UserSummary(6L, "", "Free", "Lancer", true, true);
+
+        paymentEmailService.sendReleasedEmail(freelancer, samplePayment(PaymentStatus.RELEASED));
+
+        verify(mailSender, never()).createMimeMessage();
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
     private UserSummary sampleFreelancer() {
         return new UserSummary(6L, "freelancer@test.com", "Free", "Lancer", true, true);
     }
