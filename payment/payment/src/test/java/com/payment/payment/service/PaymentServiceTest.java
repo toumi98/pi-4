@@ -283,12 +283,6 @@ class PaymentServiceTest {
     void handleStripeWebhookRejectsMissingPaymentIdMetadata() throws Exception {
         ReflectionTestUtils.setField(paymentService, "stripeWebhookSecret", "secret");
         String payload = "{\"data\":{\"object\":{\"metadata\":{}}}}";
-        ObjectNode root = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-        root.set("data", new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
-                .set("object", new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
-                        .set("metadata", new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode())));
-
-        when(objectMapper.readTree(payload)).thenReturn(root);
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
