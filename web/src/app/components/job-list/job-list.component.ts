@@ -177,8 +177,6 @@ import { Job, JobFilters } from '../../models/models';
     </div>
   `,
   styles: [`
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
-
     .job-list-container {
       font-family: 'DM Sans', sans-serif;
       min-height: 100vh;

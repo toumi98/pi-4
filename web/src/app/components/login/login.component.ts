@@ -75,8 +75,6 @@ import { AuthService } from '../../services/auth.service';
     </div>
   `,
   styles: [`
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
-
     .login-container {
       min-height: 100vh;
       display: flex;

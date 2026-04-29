@@ -116,8 +116,6 @@ import { AuthService } from '../../services/auth.service';
     </div>
   `,
   styles: [`
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&display=swap');
-
     .home-container {
       font-family: 'DM Sans', sans-serif;
     }
