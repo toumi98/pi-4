@@ -215,6 +215,6 @@ The current repository state prioritizes:
 - fast reproducible local execution
 - visible CI/CD evidence
 - measurable test coverage improvements
-- a simple but defensible Kubernetes deployment path
+- a simple but defensible Kubernetes deployment path // test 
 
 That makes it suitable for technical demonstration, academic evaluation, and incremental extension.
